@@ -17,7 +17,7 @@ function find(name, callback) {
     });
 }
 
-function match(winner_name, loser_name) {
+function match(winner_name, loser_name, final_callback) {
     async.parallel({
             winner: function (callback) { find(winner_name, callback); },
             loser: function (callback) { find(loser_name, callback); }
@@ -28,6 +28,7 @@ function match(winner_name, loser_name) {
             results.loser.rating = values[1][0];
             results.winner.save(function (err, res) { if (err) { console.log(err); }});
             results.loser.save(function (err, res) { if (err) { console.log(err); }});
+            final_callback();
         }
     );
 }
@@ -54,17 +55,25 @@ function record_matches(tournament_string) {
                     }
                 },
                 function (err, results) {
-                    _.forEach(results['matches'], function (m) {
-                        match(results['participants'][m['match']['winner_id']], results['participants'][m['match']['loser_id']]);
-                    });
+                    async.eachSeries(results['matches'], function (m, callback) {
+                        match(results['participants'][m['match']['winner_id']], results['participants'][m['match']['loser_id']], callback);
+                    }, function (err) {});
                 }
             );
         }
     );
 }
 
+function leaderboard() {
+    mongo.Player.find({}, function (err, res) {
+        var sorted = res.sort(function (a, b) { return trueskill.expose(b.rating) - trueskill.expose(a.rating); });
+        return sorted.map(function (input) { return input.displayName; });
+    });
+}
+
 module.exports = {
     find: find,
     match: match,
-    record_matches: record_matches
+    record_matches: record_matches,
+    leaderboard: leaderboard
 };
